@@ -37,6 +37,12 @@ namespace {GxFrameRenderer* active=nullptr;
 // Logs/shot-<process seconds>.bgra (u32 width, u32 height, BGRA rows) by a
 // detached thread. Lets a run be checked visually without the TV.
 constexpr uint64_t kShotInterval=30'000'000'000u;
+#if !defined(MKW_PS5_RELEASE)
+// DIAGNOSTIC, same flag file as the capture: log whether each presented frame is
+// the game's own display copy or the fallback raw EFB, so startup flicker can be
+// attributed instead of guessed. Never compiled into a player package.
+uint64_t g_presentFallbackFrames=0,g_presentCopyFrames=0,g_presentFrameCount=0;
+#endif
 bool screenshots_requested(){
 #if defined(MKW_PS5_RELEASE)
     return false;  // player package: never probes the flag file
@@ -90,6 +96,9 @@ struct GxFrameRenderer::Impl {
     std::unique_ptr<Core> core;
     GxVideoPlan plan{};GxRenderExtent previousExtent;
     PresentedFrame presented{};
+    // Last frame actually handed to VideoOut, so a frame without a fresh display
+    // copy repeats it instead of strobing the raw EFB.
+    std::shared_ptr<const GpuColorTarget> lastPresented;
     bool inFrame=false,failed=false,closed=false,disableFilter=false;
     // Periodic backend timing report: wall time inside begin..end, presentation,
     // draw submission, GPU waits, blits and texture uploads per frame.
@@ -157,6 +166,11 @@ struct GxFrameRenderer::Impl {
         put("guest-idle-sleep",perFrameMs(idleSleep-idleSleepAtReport),"ms");
         put("guest-cpu",double(sceKernelGetCurrentCpu()),"");
         put("fp-denormal-frames",double(denormalFrames),"");put("fp-flush-frames",double(flushToZeroFrames),"");denormalFrames=flushToZeroFrames=0;
+#if !defined(MKW_PS5_RELEASE)
+        // Startup flicker attribution: a presented frame with no display copy yet
+        // is the raw EFB, which is what the safety-screen strobe alternates with.
+        put("present-copy",double(g_presentCopyFrames),"");put("present-fallback",double(g_presentFallbackFrames),"");
+#endif
         put("log-write-max",double(mkw_log_max_write_nanos())*1e-6,"ms");put("log-dropped",double(mkw_log_dropped()),"");
         if(intervalCount){
             std::sort(intervals.begin(),intervals.begin()+intervalCount);
@@ -222,7 +236,21 @@ struct GxFrameRenderer::Impl {
         HostPhaseScope phase(HostPhase::FrameEnd);
         try{
             {const auto drainStart=gpu_clock_nanos();if(aurora::gx::fifo::get_buffer_size())aurora::gx::fifo::drain();core->renderer.finish();gx_perf_add(gx_perf_stats().fifoNanos,gpu_clock_nanos()-drainStart);}
-            std::shared_ptr<const GpuColorTarget> source=core->display.latest();if(!source)source=core->color;
+            std::shared_ptr<const GpuColorTarget> source=core->display.latest();
+#if !defined(MKW_PS5_RELEASE)
+            if(screenshots_requested()){
+                ++g_presentFrameCount;
+                if(source)++g_presentCopyFrames;else ++g_presentFallbackFrames;
+            }
+#endif
+            // Before the game's first display copy exists, the only candidate is
+            // the raw EFB, which for the Wii safety screen alternates with the
+            // real copy and reads as a full-screen white/black strobe. Hold the
+            // last real frame instead, and only fall back when nothing has been
+            // shown yet at all (the very first frame of the run).
+            if(!source&&lastPresented)source=lastPresented;
+            if(!source)source=core->color;
+            lastPresented=source;
             const float aspect=plan.presentAspect>0?plan.presentAspect:float(source->layout().width())/source->layout().height();
             const auto presentStart=gpu_clock_nanos();
             HostPhaseScope presentPhase(HostPhase::Present);
