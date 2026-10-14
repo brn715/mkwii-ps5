@@ -91,8 +91,12 @@ def main(argv: list[str]) -> int:
         "shaders/copy_vertex.sb": REPO / "ps5link-sdk" / "shaders" / "third_party" / "sharpprospero" / "mesh_vs.sb",
         "shaders/copy_pixel.sb": REPO / "artifacts" / "gx-copy-shader" / "copy.sb",
         "runtime/assets/dsp/dsp_coef.bin": REPO / "Wiicompiled" / "runtime" / "assets" / "dsp" / "dsp_coef.bin",
-        # Console artwork: the home-screen icon and the title background.
-        "sce_sys/pic0.png": REPO / "ps5" / "assets" / "bg.png",
+        # Console artwork. The icon is PNG; the two 3840x2160 title backgrounds
+        # are DX10 BC7_UNORM DDS, which is what the shell actually renders for
+        # every retail title (checked against the installed library). Produce
+        # them with tools/bc7 (see its build.sh) from a source PNG.
+        "sce_sys/pic0.dds": REPO / "ps5" / "assets" / "pic0.dds",
+        "sce_sys/pic1.dds": REPO / "ps5" / "assets" / "pic1.dds",
     }
     for name, source in inputs.items():
         if not source.exists():

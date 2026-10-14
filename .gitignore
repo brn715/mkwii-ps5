@@ -37,3 +37,6 @@ ps5/local.json
 *.self
 *.rpx
 
+
+# BC7 encoder build output (sources are vendored under tools/bc7)
+tools/bc7/bc7tool
