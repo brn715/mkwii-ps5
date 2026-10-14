@@ -85,12 +85,14 @@ def main(argv: list[str]) -> int:
     inputs = {
         "eboot.bin": exe / "eboot.bin",
         "sce_module/libc.prx": REPO / ".tools" / "console" / "libc.prx",
-        "sce_sys/icon0.png": REPO / "SharpProspero" / "samples" / "prospero-3d" / "sce_sys" / "icon0.png",
+        "sce_sys/icon0.png": REPO / "ps5" / "assets" / "icon0.png",
         "shaders/gx_vertex.sb": REPO / "artifacts" / "gx-varyings" / "vertex.sb",
         "shaders/gx_pixel.sb": REPO / "artifacts" / "tev-fragment" / "tev_probe.sb",
         "shaders/copy_vertex.sb": REPO / "ps5link-sdk" / "shaders" / "third_party" / "sharpprospero" / "mesh_vs.sb",
         "shaders/copy_pixel.sb": REPO / "artifacts" / "gx-copy-shader" / "copy.sb",
         "runtime/assets/dsp/dsp_coef.bin": REPO / "Wiicompiled" / "runtime" / "assets" / "dsp" / "dsp_coef.bin",
+        # Console artwork: the home-screen icon and the title background.
+        "sce_sys/pic0.png": REPO / "ps5" / "assets" / "bg.png",
     }
     for name, source in inputs.items():
         if not source.exists():
