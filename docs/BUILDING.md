@@ -16,6 +16,39 @@ The existing build scripts target Windows with PowerShell 7, Git, CMake/Ninja, P
 
 Scripts expect local tools beneath `.tools/` and default to a Visual Studio CMake/Ninja location. Supply the exposed `-CMake` and `-Ninja` arguments for another installation. A signed `libc.prx` supplied locally is expected at `.tools/console/libc.prx`.
 
+## macOS / Linux (bash) pipeline
+
+`tools/build-macos.sh` runs the same pipeline without PowerShell. It has been
+verified on macOS arm64 (Apple silicon) and reuses the host-aware cmake
+toolchain in `ps5/cmake/ps5-cxx.cmake`.
+
+```bash
+tools/build-macos.sh --check         # verify prerequisites and print the plan
+tools/build-macos.sh                 # full build: fetch, build, link, package
+tools/build-macos.sh fetch           # only fetch + verify sources
+tools/build-macos.sh build           # libc++, translate + compile game/runtime, SDL, shaders
+tools/build-macos.sh link            # audit, link, sign, assemble the PPSA99611 package
+tools/build-macos.sh package         # package only
+tools/build-macos.sh clean-plan      # print what a clean would remove (no action)
+```
+
+Options: `--jobs N` (compile parallelism), `--threads N` (translator threads),
+`--force`, `--retro-rewind` (also translate the Retro Rewind mod profile).
+`--check` never builds; it exits non-zero and lists every missing prerequisite.
+
+Prerequisites on the host: the .NET 10 SDK (`dotnet` on PATH), cmake, ninja,
+python3, git, LLVM 18.1.8 at `/opt/homebrew/opt/llvm@18/bin` (override with
+`MKW_LLVM18_BIN`), and — supplied locally and untracked — `.tools/console/libc.prx`,
+the PAL `main.dol`/`StaticR.rel`, and `artifacts/kernel-exports/result.json`.
+The pinned llvm-mingw macOS-universal archive, the LLVM 18.1.8 sources, the
+FreeBSD 9.3 headers and the runtime dependency archives are fetched and
+checksum-verified by the script, matching the `ps5/Prepare-*.ps1` checks.
+
+The .NET helpers live in `tools/host-port/` (dependency fetching with SHA-256
+verification, the verified libc NID stub, the link-manifest assembly, the
+executable/package builders, and `--check`). The Windows `.ps1` scripts are
+unchanged.
+
 ## Build entry points
 
 | Stage | Script |
