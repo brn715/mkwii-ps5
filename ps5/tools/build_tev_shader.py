@@ -35,7 +35,7 @@ if options.varyings:options.projected=True
 if options.projected:options.direct=True
 if options.direct and options.program:
     args.error('--direct and --program are mutually exclusive')
-BIN = ROOT / '.tools/clang+llvm-18.1.8-x86_64-pc-windows-msvc/bin'
+BIN = Path(__import__('os').environ.get('MKW_LLVM18_BIN','/opt/homebrew/opt/llvm@18/bin'))
 OUT = ROOT / ('artifacts/tev-program' if options.program else 'artifacts/tev-shaders')
 SOURCE = ROOT / ('ps5/gpu/shaders/tev_program_probe.c' if options.program else 'ps5/gpu/shaders/tev_probe.c')
 if options.direct:
@@ -54,11 +54,11 @@ def run(tool, *args):
     subprocess.run([str(BIN / tool), *map(str, args)], check=True)
 
 
-for tool in ('clang.exe', 'llc.exe'):
+for tool in ('clang', 'llc'):
     version = subprocess.check_output([str(BIN / tool), '--version'], text=True)
     if not re.search(r'version 18\.1\.8\b', version):
         raise RuntimeError('The shader ABI pipeline requires LLVM 18.1.8: ' + tool)
-run('clang.exe', '-target', 'amdgcn-amd-unknown', '-mcpu='+CPU,
+run('clang', '-target', 'amdgcn-amd-unknown', '-mcpu='+CPU,
     '-mwavefrontsize64', '-nogpulib', '-ffreestanding', '-O2',
     '-fno-fast-math', '-ffp-contract=off', '-S', '-emit-llvm',
     *(['-DMKW_GX_PROJECTED'] if options.projected else []),*(['-DMKW_GX_VARYINGS'] if options.varyings else []),
@@ -82,7 +82,7 @@ if vectors != 3 or masks != 1 or new == old:
 ir = ir.replace(old, new)
 (OUT / 'tev_probe-ps.ll').write_text(ir, encoding='utf-8', newline='\n')
 for kind, suffix in [('asm', 's'), ('obj', 'o')]:
-    run('llc.exe', '-mtriple=amdgcn-amd-unknown', '-mcpu='+CPU,
+    run('llc', '-mtriple=amdgcn-amd-unknown', '-mcpu='+CPU,
         '-verify-machineinstrs', '-filetype=' + kind,
         OUT / 'tev_probe-ps.ll', '-o', OUT / ('tev_probe.' + suffix))
 assembly = (OUT / 'tev_probe.s').read_text(encoding='utf-8')

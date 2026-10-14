@@ -18,7 +18,7 @@ from agc_header import set_register_bits
 from agc_varyings import set_varying_count
 
 ROOT=Path(__file__).resolve().parents[2]
-BIN=ROOT/'.tools/clang+llvm-18.1.8-x86_64-pc-windows-msvc/bin'
+BIN=Path(__import__('os').environ.get('MKW_LLVM18_BIN','/opt/homebrew/opt/llvm@18/bin'))
 OUT=ROOT/'artifacts/gx-vertex'
 SOURCE=ROOT/'ps5/gpu/shaders/gx_vertex_probe.c'
 parser=argparse.ArgumentParser();parser.add_argument('--raw',action='store_true')
@@ -45,10 +45,10 @@ def code_of_obj(file):
     return next(s['data'] for s in sections if s['name']=='.text')
 def assemble(text,name):
     source=OUT/(name+'.s');obj=OUT/(name+'.o');source.write_text(text,encoding='utf-8',newline='\n')
-    run('llvm-mc.exe','--triple=amdgcn-amd-amdhsa','--mcpu=gfx1010',
+    run('llvm-mc','--triple=amdgcn-amd-amdhsa','--mcpu=gfx1010',
         '-mattr=+wavefrontsize64,-wavefrontsize32','-filetype=obj',source,'-o',obj)
     return code_of_obj(obj)
-for tool in ('clang.exe','llc.exe','llvm-mc.exe'):
+for tool in ('clang','llc','llvm-mc'):
     if not re.search(r'version 18\.1\.8\b',subprocess.check_output([str(BIN/tool),'--version'],text=True)):
         raise RuntimeError('Expected LLVM 18.1.8')
 base=(ROOT/'ps5link-sdk/shaders/third_party/sharpprospero/mesh_vs.sb').read_bytes()
@@ -72,7 +72,7 @@ prefix='''\t.text
 '''
 prefix_code=assemble(prefix,'entry-prefix')
 if prefix_code!=original[:len(prefix_code)]:raise RuntimeError('AGC primitive entry differs from supplied shader')
-run('clang.exe','-target','amdgcn-amd-unknown','-mcpu=gfx1010','-mwavefrontsize64','-nogpulib',
+run('clang','-target','amdgcn-amd-unknown','-mcpu=gfx1010','-mwavefrontsize64','-nogpulib',
     '-ffreestanding','-O2','-fno-fast-math','-ffp-contract=off','-S','-emit-llvm',
     *(['-DMKW_GX_TRANSFORMS'] if options.transforms else []),*(['-DMKW_GX_LIGHTING'] if options.lighting else []),
     *(['-DMKW_GX_TEXGEN'] if options.texgen else []),*(['-DMKW_GX_VARYINGS'] if options.varyings else []),SOURCE,'-o',OUT/'vertex.ll')
@@ -82,7 +82,7 @@ old=entries[0];new=old.replace('define dso_local void','define amdgpu_vs void')
 new,n=re.subn(r'<4 x i32> noundef','<4 x i32> inreg noundef',new)
 if n!=2 or new==old:raise RuntimeError('Unexpected Clang entry ABI')
 ir=ir.replace(old,new);(OUT/'vertex-vs.ll').write_text(ir,encoding='utf-8',newline='\n')
-run('llc.exe','-mtriple=amdgcn-amd-unknown','-mcpu=gfx1010','-verify-machineinstrs','-filetype=asm',OUT/'vertex-vs.ll','-o',OUT/'body.s')
+run('llc','-mtriple=amdgcn-amd-unknown','-mcpu=gfx1010','-verify-machineinstrs','-filetype=asm',OUT/'vertex-vs.ll','-o',OUT/'body.s')
 assembly=(OUT/'body.s').read_text(encoding='utf-8')
 stats={k:int(re.search(r'; '+k+r': (\d+)',assembly)[1]) for k in ['NumSgprs','NumVgprs','ScratchSize']}
 if stats['ScratchSize']:raise RuntimeError('Vertex shader requires scratch')

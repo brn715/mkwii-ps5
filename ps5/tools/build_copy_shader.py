@@ -10,15 +10,15 @@ import subprocess
 from agc_header import set_register_bits
 
 ROOT=Path(__file__).resolve().parents[2]
-BIN=ROOT/'.tools/clang+llvm-18.1.8-x86_64-pc-windows-msvc/bin'
+BIN=Path(__import__('os').environ.get('MKW_LLVM18_BIN','/opt/homebrew/opt/llvm@18/bin'))
 OUT=ROOT/'artifacts/gx-copy-shader'
 SOURCE=ROOT/'ps5/gpu/shaders/gx_copy.c'
 OUT.mkdir(parents=True,exist_ok=True)
 def run(tool,*args):subprocess.run([str(BIN/tool),*map(str,args)],check=True)
-for tool in ('clang.exe','llc.exe'):
+for tool in ('clang','llc'):
     if not re.search(r'version 18\.1\.8\b',subprocess.check_output([str(BIN/tool),'--version'],text=True)):
         raise RuntimeError('Expected pinned LLVM 18.1.8')
-run('clang.exe','-target','amdgcn-amd-unknown','-mcpu=gfx1010','-mwavefrontsize64','-nogpulib',
+run('clang','-target','amdgcn-amd-unknown','-mcpu=gfx1010','-mwavefrontsize64','-nogpulib',
     '-ffreestanding','-O2','-fno-fast-math','-ffp-contract=off','-S','-emit-llvm',SOURCE,'-o',OUT/'copy.ll')
 ir=(OUT/'copy.ll').read_text()
 entries=re.findall(r'^define .*$',ir,re.M)
@@ -29,7 +29,7 @@ new,m=re.subn(r'(?<!x )i32 noundef %3','i32 inreg noundef %3',new)
 if n!=3 or m!=1 or new==old:raise RuntimeError('Unexpected copy entry ABI')
 (OUT/'copy-ps.ll').write_text(ir.replace(old,new),newline='\n')
 for kind,suffix in [('asm','s'),('obj','o')]:
-    run('llc.exe','-mtriple=amdgcn-amd-unknown','-mcpu=gfx1010','-verify-machineinstrs',
+    run('llc','-mtriple=amdgcn-amd-unknown','-mcpu=gfx1010','-verify-machineinstrs',
         '-filetype='+kind,OUT/'copy-ps.ll','-o',OUT/('copy.'+suffix))
 asm=(OUT/'copy.s').read_text()
 stats={k:int(re.search(r'; '+k+r': (\d+)',asm)[1]) for k in ['NumSgprs','NumVgprs','ScratchSize','SGPRBlocks','VGPRBlocks']}

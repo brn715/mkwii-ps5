@@ -84,10 +84,16 @@ target_link_libraries(mkw_ps5_cpu_baseline PRIVATE mkw_ps5_libcxx)
 target_compile_features(mkw_ps5_cpu_baseline PRIVATE cxx_std_17)
 set_target_properties(mkw_ps5_cpu_baseline PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# The Windows-hosted translator currently writes a COFF section directive.
-# Adapt that directive in the build tree only; keep all original data bytes.
+# The translator emits a section directive in its host assembler's dialect:
+# COFF (".section .rdata,\"dr\"") on Windows, Mach-O (".section __TEXT,__const")
+# on macOS. Rewrite whichever form appears to the ELF directive the PS5 target
+# assembles; keep all original data bytes untouched. The macOS path additionally
+# prefixes every global with a Mach-O underscore (".globl _kData__init"), which
+# ELF does not, so drop it for the kData/kSize symbols the C++ side declares.
 file(READ "${MKW_GAME_ROOT}/generated/data_sections_init_blobs.S" MKW_BLOB_ASM)
 string(REPLACE ".section .rdata,\"dr\"" ".section .rodata,\"a\",@progbits" MKW_BLOB_ASM "${MKW_BLOB_ASM}")
+string(REPLACE ".section __TEXT,__const" ".section .rodata,\"a\",@progbits" MKW_BLOB_ASM "${MKW_BLOB_ASM}")
+string(REGEX REPLACE "(\n|\\.globl[ \t]+)_k(Data|Size)" "\\1k\\2" MKW_BLOB_ASM "${MKW_BLOB_ASM}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/data_sections_init_blobs_ps5.S" "${MKW_BLOB_ASM}")
 # The product descriptor lives in the game build (not mkw_ps5_runtime) so one
 # runtime-build tree serves both the base and Retro Rewind game variants.
